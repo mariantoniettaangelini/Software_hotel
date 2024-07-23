@@ -1,0 +1,60 @@
+﻿@model IEnumerable<Software_hotel.Models.Prenotazione>
+
+@{
+    ViewData["Title"] = "Home Page";
+}
+
+<div class="text-center">
+    <h1 class="display-4">Prenotazioni</h1>
+
+    <!-- Form di ricerca -->
+    @using (Html.BeginForm("CercaCliente", "Home", FormMethod.Get, new { @class = "form-inline justify-content-center" }))
+    {
+        <div class="form-group mb-2">
+            <label for="inputCF" class="sr-only">Codice Fiscale</label>
+            <input type="text" class="form-control" id="inputCF" name="codiceFiscale" placeholder="Inserire Codice Fiscale" required>
+        </div>
+        <button type="submit" class="btn btn-primary mb-2">Cerca</button>
+    }
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Cliente</th>
+                <th>Camera</th>
+                <th>Data Prenotazione</th>
+                <th>Inizio Soggiorno</th>
+                <th>Fine Soggiorno</th>
+                <th>Caparra</th>
+                <th>Tariffa</th>
+                <th>Tipo Pensione</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (Model.Any())
+            {
+                foreach (var item in Model)
+                {
+                    <tr>
+                        <td>@item.idPrenotazione</td>
+                        <td>@item.cliente.Nome @item.cliente.Cognome</td>
+                        <td>@item.camera.Descrizione</td>
+                        <td>@item.DataPrenotazione.ToShortDateString()</td>
+                        <td>@item.InizioSoggiorno.ToShortDateString()</td>
+                        <td>@item.FineSoggiorno.ToShortDateString()</td>
+                        <td>@item.Caparra.ToString("C")</td>
+                        <td>@item.Tariffa.ToString("C")</td>
+                        <td>@item.TipoPensione</td>
+                    </tr>
+                }
+            }
+            else
+            {
+                <tr>
+                    <td colspan="9" class="text-center">Nessuna prenotazione trovata.</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
