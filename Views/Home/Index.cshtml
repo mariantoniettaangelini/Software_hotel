@@ -29,6 +29,8 @@
                 <th>Caparra</th>
                 <th>Tariffa</th>
                 <th>Tipo Pensione</th>
+                <th>Importo da Saldare</th> 
+                <th>Modifica prenotazione</th>
             </tr>
         </thead>
         <tbody>
@@ -46,13 +48,17 @@
                         <td>@item.Caparra.ToString("C")</td>
                         <td>@item.Tariffa.ToString("C")</td>
                         <td>@item.TipoPensione</td>
+                        <b><td>@item.ImportoDaSaldare.ToString("C")</td></b>
+                        <td>
+                            @Html.ActionLink("Modifica", "ModificaPrenotazione", new { id = item.idPrenotazione }, new { @class = "btn btn-primary" })
+                        </td>
                     </tr>
                 }
             }
             else
             {
                 <tr>
-                    <td colspan="9" class="text-center">Nessuna prenotazione trovata.</td>
+                    <td colspan="10" class="text-center">Nessuna prenotazione trovata.</td>
                 </tr>
             }
         </tbody>

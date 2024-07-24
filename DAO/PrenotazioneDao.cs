@@ -10,37 +10,45 @@ namespace Software_hotel.DAO
         private const string SELECT_ALL_PRENOTAZIONI = @" 
         SELECT p.idPrenotazione, c.CodiceFiscale, c.Cognome, c.Nome, c.Citta, c.Provincia, c.Email, c.Telefono, c.Cellulare,
         ca.Descrizione AS DescrizioneStanza, ca.Tipologia,
-        p.DataPrenotazione, p.DataInizioSoggiorno, p.DataFineSoggiorno, p.Caparra, p.Tariffa, p.TipoPensione,
-        sp.idSP, sp.Prezzo, sp.Quantita, sa.DescrizioneServizio
+        p.DataPrenotazione, p.DataInizioSoggiorno, p.DataFineSoggiorno, p.Caparra, p.Tariffa, p.TipoPensione        
         FROM Prenotazioni p
         INNER JOIN Clienti c ON p.idCliente = c.idCliente
         INNER JOIN Camera ca ON p.idCamera = ca.idCamera
-        LEFT JOIN ServiziPerPrenotazione sp ON p.idPrenotazione = sp.idPrenotazione
-        LEFT JOIN ServiziAggiuntivi sa ON sp.idServizio = sa.idServizio";
+        ";
 
         private const string SELECT_BY_CF = @"
         SELECT p.idPrenotazione, c.CodiceFiscale, c.Cognome, c.Nome, c.Citta, c.Provincia, c.Email, c.Telefono, c.Cellulare,
         ca.Descrizione AS DescrizioneStanza, ca.Tipologia,
-        p.DataPrenotazione, p.DataInizioSoggiorno, p.DataFineSoggiorno, p.Caparra, p.Tariffa, p.TipoPensione,
-        sp.idSP, sp.Prezzo, sp.Quantita, sa.DescrizioneServizio
+        p.DataPrenotazione, p.DataInizioSoggiorno, p.DataFineSoggiorno, p.Caparra, p.Tariffa, p.TipoPensione       
         FROM Prenotazioni p
         INNER JOIN Clienti c ON p.idCliente = c.idCliente
         INNER JOIN Camera ca ON p.idCamera = ca.idCamera
-        LEFT JOIN ServiziPerPrenotazione sp ON p.idPrenotazione = sp.idPrenotazione
-        LEFT JOIN ServiziAggiuntivi sa ON sp.idServizio = sa.idServizio
         WHERE c.CodiceFiscale LIKE @CodiceFiscale + '%'";
 
+        private const string SELECT_BY_PENSIONE = @"
+        SELECT p.idPrenotazione, c.CodiceFiscale, c.Cognome, c.Nome, c.Citta, c.Provincia, c.Email, c.Telefono, c.Cellulare,
+        ca.Descrizione AS DescrizioneStanza, ca.Tipologia,
+        p.DataPrenotazione, p.DataInizioSoggiorno, p.DataFineSoggiorno, p.Caparra, p.Tariffa, p.TipoPensione       
+        FROM Prenotazioni p
+        INNER JOIN Clienti c ON p.idCliente = c.idCliente
+        INNER JOIN Camera ca ON p.idCamera = ca.idCamera
+        WHERE p.TipoPensione = 'pensione completa'";
+
         private const string SELECT_ALL_SERVIZI = @"
-        SELECT sp.idSP, sp.idServizio, sp.idPrenotazione, sp.Prezzo, sp.Quantita, sa.DescrizioneServizio
+        SELECT IdServizio, DescrizioneServizio FROM ServiziAggiuntivi";
+
+        private const string ADD_SERVIZIO = @"
+        INSERT INTO ServiziPerPrenotazione (idServizio, idPrenotazione, Prezzo, Quantita)
+        VALUES (@idServizio, @idPrenotazione, @Prezzo, @Quantita)";
+
+        private const string SELECT_SERVIZI_PER_PRENOTAZIONE = @"
+        SELECT sp.idSp, sp.idServizio, sp.idPrenotazione, sp.Prezzo, sp.Quantita,
+        sa.DescrizioneServizio
         FROM ServiziPerPrenotazione sp
-        INNER JOIN ServiziAggiuntivi sa ON sp.idServizio = sa.idServizio";
+        JOIN ServiziAggiuntivi sa ON sp.idServizio = sa.idServizio 
+        WHERE idPrenotazione = @id";
         public PrenotazioneDao(IConfiguration config) : base(config)
         {
-        }
-
-        public void AggiungiServizio(ServizioPerPrenotazione servizioPerPrenotazione)
-        {
-            throw new NotImplementedException();
         }
 
         public IEnumerable<Prenotazione> GetAll()
@@ -81,17 +89,27 @@ namespace Software_hotel.DAO
                         TipoPensione = reader.IsDBNull(16) ? null : reader.GetString(16),
                         serviziPerPrenotazione = new List<ServizioPerPrenotazione>()
                     };
-                    if (!reader.IsDBNull(17)) 
-                    {
-                        prenotazione.serviziPerPrenotazione.Add(new ServizioPerPrenotazione
-                        {
-                            idSP = reader.GetInt32(17),
-                            Prezzo = reader.GetDecimal(18),
-                            Quantita = reader.GetInt32(19),
-                            DescrizioneServizio = reader.GetString(20)
-                        });
-                    }
+                    decimal totaleServizi = 0m; // Totale dei servizi = 0
+
+                    //do
+                    //{
+                    //    if (!reader.IsDBNull(17))
+                    //    {
+                    //        var servizio = new ServizioPerPrenotazione
+                    //        {
+                    //            idSP = reader.GetInt32(17),
+                    //            Prezzo = reader.GetDecimal(18),
+                    //            Quantita = reader.GetInt32(19),
+                    //            DescrizioneServizio = reader.GetString(20)
+                    //        };
+                    //        totaleServizi += servizio.Prezzo * servizio.Quantita; 
+                    //        prenotazione.serviziPerPrenotazione.Add(servizio);
+                    //    }
+                    //} while (reader.Read() && reader.GetInt32(0) == prenotazione.idPrenotazione);
+
+                    prenotazione.ImportoDaSaldare = prenotazione.Tariffa - prenotazione.Caparra + totaleServizi;
                     prenotazioni.Add(prenotazione);
+
                 }
             }
             catch (Exception ex)
@@ -102,14 +120,64 @@ namespace Software_hotel.DAO
             return prenotazioni;
         }
 
-        public IEnumerable<ServizioPerPrenotazione> GetListaServizi()
+
+        public IEnumerable<ServiziAggiuntivi> GetListaServizi()
         {
-            var servizi = new List<ServizioPerPrenotazione>();
+            var servizi = new List<ServiziAggiuntivi>();
             try
             {
                 using var conn = CreateConnection();
                 conn.Open();
                 using var cmd = GetCommand(SELECT_ALL_SERVIZI, conn);
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    var servizio = new ServiziAggiuntivi
+                    {
+                        idServizio = reader.GetInt32(0),
+                        DescrizioneServizio = reader.GetString(1)
+                    };
+                    servizi.Add(servizio);
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Errore nel recupero dei servizi aggiuntivi", ex);
+            }
+            return servizi;
+        }
+
+        public void AggiungiServizio(int idPrenotazione, ServizioPerPrenotazione servizioPerPrenotazione)
+        {
+            try
+            {
+                using var conn = CreateConnection();
+                conn.Open();
+                using var cmd = GetCommand(ADD_SERVIZIO, conn);
+                cmd.Parameters.Add(new SqlParameter("@idServizio", servizioPerPrenotazione.idServizio));
+                cmd.Parameters.Add(new SqlParameter("@idPrenotazione", idPrenotazione));
+                cmd.Parameters.Add(new SqlParameter("@Prezzo", servizioPerPrenotazione.Prezzo));
+                cmd.Parameters.Add(new SqlParameter("@Quantita", servizioPerPrenotazione.Quantita));
+
+                cmd.ExecuteNonQuery();
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Errore nell'aggiunta del servizio", ex);
+            }
+        }
+
+        public IEnumerable<ServizioPerPrenotazione> GetServiziPerPrenotazione(int idPrenotazione)
+        {
+            List<ServizioPerPrenotazione> servizi = new List<ServizioPerPrenotazione>();
+
+            try
+            {
+                using var conn = CreateConnection();
+                conn.Open();
+                using var cmd = GetCommand(SELECT_SERVIZI_PER_PRENOTAZIONE, conn);
+                cmd.Parameters.Add(new SqlParameter("@id", idPrenotazione));
+
                 using var reader = cmd.ExecuteReader();
                 while (reader.Read())
                 {
@@ -124,10 +192,12 @@ namespace Software_hotel.DAO
                     };
                     servizi.Add(servizio);
                 }
+
+
             }
             catch (Exception ex)
             {
-                throw new Exception("Errore nel recupero dei servizi aggiuntivi", ex);
+                throw new Exception("Errore", ex);
             }
             return servizi;
         }
@@ -172,29 +242,82 @@ namespace Software_hotel.DAO
                         serviziPerPrenotazione = new List<ServizioPerPrenotazione>()
                     };
 
-                    if (!reader.IsDBNull(17))
-                    {
-                        prenotazione.serviziPerPrenotazione.Add(new ServizioPerPrenotazione
-                        {
-                            idSP = reader.GetInt32(17),
-                            Prezzo = reader.GetDecimal(18),
-                            Quantita = reader.GetInt32(19),
-                            DescrizioneServizio = reader.GetString(20)
-                        });
-                    }
+                    decimal totaleServizi = 0m; // Totale dei servizi = 0
+
+                    //do
+                    //{
+                    //    if (!reader.IsDBNull(17))
+                    //    {
+                    //        var servizio = new ServizioPerPrenotazione
+                    //        {
+                    //            idSP = reader.GetInt32(17),
+                    //            Prezzo = reader.GetDecimal(18),
+                    //            Quantita = reader.GetInt32(19),
+                    //            DescrizioneServizio = reader.GetString(20)
+                    //        };
+                    //        totaleServizi += servizio.Prezzo * servizio.Quantita;
+                    //        prenotazione.serviziPerPrenotazione.Add(servizio);
+                    //    }
+                    //} while (reader.Read() && reader.GetInt32(0) == prenotazione.idPrenotazione);
+
+                    prenotazione.ImportoDaSaldare = prenotazione.Tariffa - prenotazione.Caparra + totaleServizi;
                     prenotazioni.Add(prenotazione);
+
                 }
             }
             catch (Exception ex)
             {
-                throw new Exception("Errore nel recupero delle prenotazioni tramite CF", ex);
+                throw new Exception("Errore nel recupero delle prenotazioni", ex);
             }
             return prenotazioni;
         }
 
         public IEnumerable<Prenotazione> GetPrenotazioneByPensione(string TipoPensione)
         {
-            throw new NotImplementedException();
+            var prenotazioni = new List<Prenotazione>();
+            try
+            {
+                using var conn = CreateConnection();
+                conn.Open();
+                using var cmd = GetCommand(SELECT_BY_PENSIONE, conn);
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    var prenotazione = new Prenotazione
+                    {
+                        idPrenotazione = reader.GetInt32(0),
+                        cliente = new Cliente
+                        {
+                            CodiceFiscale = reader.GetString(1),
+                            Cognome = reader.GetString(2),
+                            Nome = reader.GetString(3),
+                            Citta = reader.GetString(4),
+                            Provincia = reader.GetString(5),
+                            Email = reader.GetString(6),
+                            Telefono = reader.GetString(7),
+                            Cellulare = reader.GetString(8),
+                        },
+                        camera = new Camera
+                        {
+                            Descrizione = reader.GetString(9),
+                            Tipologia = reader.GetString(10),
+                        },
+                        DataPrenotazione = reader.GetDateTime(11),
+                        InizioSoggiorno = reader.GetDateTime(12),
+                        FineSoggiorno = reader.GetDateTime(13),
+                        Caparra = reader.GetDecimal(14),
+                        Tariffa = reader.GetDecimal(15),
+                        TipoPensione = reader.GetString(16)
+                    };
+                    prenotazioni.Add(prenotazione);
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Errore nel recupero delle prenotazioni per pensione completa", ex);
+            }
+
+            return prenotazioni;
         }
     }
 }

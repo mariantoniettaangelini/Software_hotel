@@ -14,5 +14,6 @@
         public string DescrizioneStanza { get; set; }
         public decimal TotaleServiziAggiuntivi { get; set; }
         public List<ServizioPerPrenotazione> serviziPerPrenotazione { get; set;  }
+        public decimal ImportoDaSaldare { get; set; }
     }
 }

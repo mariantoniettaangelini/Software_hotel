@@ -1,0 +1,40 @@
+﻿@model IEnumerable<Software_hotel.Models.Prenotazione>
+
+@{
+    ViewData["Title"] = "Prenotazioni Pensione Completa";
+}
+
+<h2>Prenotazioni Pensione Completa</h2>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>ID Prenotazione</th>
+            <th>Cliente</th>
+            <th>Camera</th>
+            <th>Data Prenotazione</th>
+            <th>Inizio Soggiorno</th>
+            <th>Fine Soggiorno</th>
+            <th>Caparra</th>
+            <th>Tariffa</th>
+            <th>Tipo Pensione</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var prenotazione in Model)
+        {
+            <tr>
+                <td>@prenotazione.idPrenotazione</td>
+                <td>@prenotazione.cliente.Nome @prenotazione.cliente.Cognome</td>
+                <td>@prenotazione.camera.Descrizione</td>
+                <td>@prenotazione.DataPrenotazione.ToShortDateString()</td>
+                <td>@prenotazione.InizioSoggiorno.ToShortDateString()</td>
+                <td>@prenotazione.FineSoggiorno.ToShortDateString()</td>
+                <td>@prenotazione.Caparra.ToString("C")</td>
+                <td>@prenotazione.Tariffa.ToString("C")</td>
+                <td>@prenotazione.TipoPensione</td>
+            </tr>
+        }
+    </tbody>
+</table>
+

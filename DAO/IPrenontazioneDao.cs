@@ -7,7 +7,9 @@ namespace Software_hotel.DAO
         IEnumerable<Prenotazione> GetAll();
         IEnumerable<Prenotazione> GetPrenotazioneByCF(string CodiceFiscale);
         IEnumerable<Prenotazione> GetPrenotazioneByPensione(string TipoPensione);
-        IEnumerable<ServizioPerPrenotazione> GetListaServizi();
-        void AggiungiServizio(ServizioPerPrenotazione servizioPerPrenotazione);
+        IEnumerable<ServiziAggiuntivi> GetListaServizi();
+        void AggiungiServizio(int idPrenotazione, ServizioPerPrenotazione servizioPerPrenotazione);
+        IEnumerable<ServizioPerPrenotazione> GetServiziPerPrenotazione(int idPrenotazione);
+
     }
 }
