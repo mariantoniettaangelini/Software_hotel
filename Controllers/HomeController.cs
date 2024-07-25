@@ -1,21 +1,73 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.AspNetCore.Authorization;
 using Software_hotel.DAO;
 using Software_hotel.Models;
 using System.Diagnostics;
+using Software_hotel.Services;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication;
+using System.Security.Claims;
 
 namespace Software_hotel.Controllers
 {
+    [Authorize] 
     public class HomeController : Controller
     {
         private readonly ILogger<HomeController> _logger;
         private readonly IPrenontazioneDao _prenotazioneDao;
+        private readonly IAuthService _authService;
 
-        public HomeController(ILogger<HomeController> logger, IPrenontazioneDao prenontazioneDao)
+
+        public HomeController(ILogger<HomeController> logger,IAuthService authservice, IPrenontazioneDao prenontazioneDao)
         {
             _logger = logger;
             _prenotazioneDao = prenontazioneDao;
+            _authService = authservice;
         }
+
+        // Aggiunta del metodo GET per il form di login
+        [AllowAnonymous] // Permette anche agli utenti non autenticati di accedere al form di login
+        public IActionResult Login()
+        {
+            return View();
+        }
+
+        // Aggiunta del metodo POST per processare i dati del form di login
+        [HttpPost]
+        [AllowAnonymous]
+        public async Task<IActionResult> Login(string username, string password, string returnUrl = null)
+        {
+
+            var user = _authService.ValidateUser(username, password);
+            if (user != null)
+            {
+                var claims = new List<Claim>
+        {
+            new Claim(ClaimTypes.Name, user.Username),
+            new Claim(ClaimTypes.Role, user.Role)
+        };
+
+                var claimsIdentity = new ClaimsIdentity(
+                    claims, CookieAuthenticationDefaults.AuthenticationScheme);
+
+                var authProperties = new AuthenticationProperties
+                {
+                    RedirectUri = returnUrl
+                };
+
+                await HttpContext.SignInAsync(
+                    CookieAuthenticationDefaults.AuthenticationScheme,
+                    new ClaimsPrincipal(claimsIdentity),
+                    authProperties);
+
+                return LocalRedirect(returnUrl);
+            }
+
+            ModelState.AddModelError(string.Empty, "Login non riuscito");
+            return View();
+        }
+
 
         public IActionResult Index()
         {
@@ -58,20 +110,20 @@ namespace Software_hotel.Controllers
             ViewBag.ServiziDisponibili = serviziDisponibili;
 
             var prezzi = new List<SelectListItem>
-        {
-            new SelectListItem { Value = "10", Text = "€10.00" },
-            new SelectListItem { Value = "20", Text = "€20.00" },
-            new SelectListItem { Value = "30", Text = "€30.00" },
-        };
-                ViewBag.Prezzi = prezzi;
+            {
+                new SelectListItem { Value = "10", Text = "€10.00" },
+                new SelectListItem { Value = "20", Text = "€20.00" },
+                new SelectListItem { Value = "30", Text = "€30.00" },
+            };
+            ViewBag.Prezzi = prezzi;
 
-                var quantita = new List<SelectListItem>
-        {
-            new SelectListItem { Value = "1", Text = "1" },
-            new SelectListItem { Value = "2", Text = "2" },
-            new SelectListItem { Value = "3", Text = "3" },
-        };
-                ViewBag.Quantita = quantita;
+            var quantita = new List<SelectListItem>
+            {
+                new SelectListItem { Value = "1", Text = "1" },
+                new SelectListItem { Value = "2", Text = "2" },
+                new SelectListItem { Value = "3", Text = "3" },
+            };
+            ViewBag.Quantita = quantita;
 
             return View(prenotazione);
         }
