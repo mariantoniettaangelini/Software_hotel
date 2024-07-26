@@ -11,55 +11,46 @@ using System.Security.Claims;
 
 namespace Software_hotel.Controllers
 {
-    [Authorize] 
+    [Authorize]
     public class HomeController : Controller
     {
         private readonly ILogger<HomeController> _logger;
         private readonly IPrenontazioneDao _prenotazioneDao;
         private readonly IAuthService _authService;
 
-
-        public HomeController(ILogger<HomeController> logger,IAuthService authservice, IPrenontazioneDao prenontazioneDao)
+        public HomeController(ILogger<HomeController> logger, IAuthService authService, IPrenontazioneDao prenotazioneDao)
         {
             _logger = logger;
-            _prenotazioneDao = prenontazioneDao;
-            _authService = authservice;
+            _authService = authService;
+            _prenotazioneDao = prenotazioneDao;
         }
 
-        // Aggiunta del metodo GET per il form di login
-        [AllowAnonymous] // Permette anche agli utenti non autenticati di accedere al form di login
+        [AllowAnonymous]
         public IActionResult Login()
         {
             return View();
         }
 
-        // Aggiunta del metodo POST per processare i dati del form di login
         [HttpPost]
         [AllowAnonymous]
-        public async Task<IActionResult> Login(string username, string password, string returnUrl = null)
+        public async Task<IActionResult> Login(string username, string password, string returnUrl = "/")
         {
-
             var user = _authService.ValidateUser(username, password);
             if (user != null)
             {
                 var claims = new List<Claim>
-        {
-            new Claim(ClaimTypes.Name, user.Username),
-            new Claim(ClaimTypes.Role, user.Role)
-        };
-
-                var claimsIdentity = new ClaimsIdentity(
-                    claims, CookieAuthenticationDefaults.AuthenticationScheme);
-
-                var authProperties = new AuthenticationProperties
                 {
-                    RedirectUri = returnUrl
+                    new Claim(ClaimTypes.Name, user.Username),
+                    new Claim(ClaimTypes.Role, user.Role)
                 };
 
-                await HttpContext.SignInAsync(
-                    CookieAuthenticationDefaults.AuthenticationScheme,
-                    new ClaimsPrincipal(claimsIdentity),
-                    authProperties);
+                var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+                await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(claimsIdentity));
+
+                if (!Url.IsLocalUrl(returnUrl))
+                {
+                    return RedirectToAction("Index", "Home");
+                }
 
                 return LocalRedirect(returnUrl);
             }
@@ -68,11 +59,60 @@ namespace Software_hotel.Controllers
             return View();
         }
 
-
         public IActionResult Index()
         {
             var prenotazioni = _prenotazioneDao.GetAll();
             return View(prenotazioni);
+        }
+
+        public IActionResult ModificaPrenotazione(int id, decimal? importoDaSaldare = null)
+        {
+            var prenotazione = _prenotazioneDao.GetAll().FirstOrDefault(p => p.idPrenotazione == id);
+
+            ViewBag.ServiziDisponibili = _prenotazioneDao.GetListaServizi()
+                .Select(s => new SelectListItem
+                {
+                    Value = s.idServizio.ToString(),
+                    Text = s.DescrizioneServizio
+                }).ToList() ?? new List<SelectListItem>(); 
+
+            ViewBag.Prezzi = new List<SelectListItem>
+                {
+                    new SelectListItem { Value = "10", Text = "€10.00" },
+                    new SelectListItem { Value = "20", Text = "€20.00" },
+                    new SelectListItem { Value = "30", Text = "€30.00" },
+                };
+
+                        ViewBag.Quantita = new List<SelectListItem>
+                {
+                    new SelectListItem { Value = "1", Text = "1" },
+                    new SelectListItem { Value = "2", Text = "2" },
+                    new SelectListItem { Value = "3", Text = "3" },
+                };
+
+            if (prenotazione == null)
+            {
+                return NotFound("Prenotazione non trovata.");
+            }
+
+            prenotazione.serviziPerPrenotazione = _prenotazioneDao.GetServiziPerPrenotazione(id).ToList();
+            ViewBag.ImportoDaSaldare = importoDaSaldare ?? prenotazione.ImportoDaSaldare; 
+
+            return View(prenotazione);
+        }
+
+
+        [HttpPost]
+        public IActionResult AggiungiServizio(int idPrenotazione, int idServizio, decimal prezzo, int quantita)
+        {
+            var servizio = new ServizioPerPrenotazione
+            {
+                idServizio = idServizio,
+                Prezzo = prezzo,
+                Quantita = quantita
+            };
+            decimal importoDaSaldare = _prenotazioneDao.AggiungiServizio(idPrenotazione, servizio);
+            return RedirectToAction("Index", new { id = idPrenotazione, importoDaSaldare = importoDaSaldare });
         }
 
         public IActionResult CercaCliente(string CodiceFiscale)
@@ -89,56 +129,6 @@ namespace Software_hotel.Controllers
         {
             var prenotazioni = _prenotazioneDao.GetPrenotazioneByPensione("pensione completa");
             return View("PensioneCompleta", prenotazioni);
-        }
-
-        public IActionResult ModificaPrenotazione(int id)
-        {
-            var prenotazione = _prenotazioneDao.GetAll().FirstOrDefault(p => p.idPrenotazione == id);
-            if (prenotazione == null)
-            {
-                return NotFound();
-            }
-            prenotazione.serviziPerPrenotazione = _prenotazioneDao.GetServiziPerPrenotazione(id).ToList();
-
-            var serviziDisponibili = _prenotazioneDao.GetListaServizi()
-                                    .Select(s => new
-                                    {
-                                        idServizio = s.idServizio,
-                                        DescrizioneServizio = s.DescrizioneServizio
-                                    }).ToList();
-
-            ViewBag.ServiziDisponibili = serviziDisponibili;
-
-            var prezzi = new List<SelectListItem>
-            {
-                new SelectListItem { Value = "10", Text = "€10.00" },
-                new SelectListItem { Value = "20", Text = "€20.00" },
-                new SelectListItem { Value = "30", Text = "€30.00" },
-            };
-            ViewBag.Prezzi = prezzi;
-
-            var quantita = new List<SelectListItem>
-            {
-                new SelectListItem { Value = "1", Text = "1" },
-                new SelectListItem { Value = "2", Text = "2" },
-                new SelectListItem { Value = "3", Text = "3" },
-            };
-            ViewBag.Quantita = quantita;
-
-            return View(prenotazione);
-        }
-
-        [HttpPost]
-        public IActionResult AggiungiServizio(int idPrenotazione, int idServizio, decimal prezzo, int quantita)
-        {
-            var servizio = new ServizioPerPrenotazione
-            {
-                idServizio = idServizio,
-                Prezzo = prezzo,
-                Quantita = quantita
-            };
-            _prenotazioneDao.AggiungiServizio(idPrenotazione, servizio);
-            return RedirectToAction("Index");
         }
 
         public IActionResult Privacy()

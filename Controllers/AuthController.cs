@@ -25,7 +25,7 @@ namespace Software_hotel.Controllers
         public async Task<IActionResult> Login(string username, string password)
         {
             var user = _authService.ValidateUser(username, password);
-            if (user == null)
+            if (user != null)
             {
 
                 var claims = new List<Claim>

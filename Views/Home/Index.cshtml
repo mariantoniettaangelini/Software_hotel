@@ -17,8 +17,8 @@
         <button type="submit" class="btn btn-primary mb-2">Cerca</button>
     }
 
-    <table class="table">
-        <thead>
+    <table class="table table-hover">
+        <thead class="thead-dark">
             <tr>
                 <th>ID</th>
                 <th>Cliente</th>
@@ -29,7 +29,7 @@
                 <th>Caparra</th>
                 <th>Tariffa</th>
                 <th>Tipo Pensione</th>
-                <th>Importo da Saldare</th> 
+                <th>Importo da Saldare</th>
                 <th>Modifica prenotazione</th>
             </tr>
         </thead>
@@ -48,7 +48,7 @@
                         <td>@item.Caparra.ToString("C")</td>
                         <td>@item.Tariffa.ToString("C")</td>
                         <td>@item.TipoPensione</td>
-                        <b><td>@item.ImportoDaSaldare.ToString("C")</td></b>
+                        <td><b>@item.ImportoDaSaldare.ToString("C")</b></td>
                         <td>
                             @Html.ActionLink("Modifica", "ModificaPrenotazione", new { id = item.idPrenotazione }, new { @class = "btn btn-primary" })
                         </td>
@@ -58,7 +58,7 @@
             else
             {
                 <tr>
-                    <td colspan="10" class="text-center">Nessuna prenotazione trovata.</td>
+                    <td colspan="11" class="text-center">Nessuna prenotazione trovata.</td>
                 </tr>
             }
         </tbody>

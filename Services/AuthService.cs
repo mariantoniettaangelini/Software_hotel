@@ -7,6 +7,10 @@ namespace Software_hotel.Services
     {
         public AuthService(IConfiguration config) : base(config)
         {
+            _users = new List<User>
+            {
+                new User {Username = "admin", Password = "123", Role = "Admin"}
+            };
         }
 
         private readonly List<User> _users = new List<User>();

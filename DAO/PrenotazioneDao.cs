@@ -7,14 +7,21 @@ namespace Software_hotel.DAO
 {
     public class PrenotazioneDao : SqlServiceSvcBase, IPrenontazioneDao
     {
-        private const string SELECT_ALL_PRENOTAZIONI = @" 
+        private const string SELECT_ALL_PRENOTAZIONI = @"
+        WITH TotaleServizi AS (
+        SELECT idPrenotazione, SUM(Prezzo * Quantita) AS Totale
+        FROM ServiziPerPrenotazione
+        GROUP BY idPrenotazione)
         SELECT p.idPrenotazione, c.CodiceFiscale, c.Cognome, c.Nome, c.Citta, c.Provincia, c.Email, c.Telefono, c.Cellulare,
         ca.Descrizione AS DescrizioneStanza, ca.Tipologia,
-        p.DataPrenotazione, p.DataInizioSoggiorno, p.DataFineSoggiorno, p.Caparra, p.Tariffa, p.TipoPensione        
+        p.DataPrenotazione, p.DataInizioSoggiorno, p.DataFineSoggiorno, p.Caparra, p.Tariffa, p.TipoPensione,
+        t.Totale AS TotaleServizi
         FROM Prenotazioni p
         INNER JOIN Clienti c ON p.idCliente = c.idCliente
         INNER JOIN Camera ca ON p.idCamera = ca.idCamera
+        LEFT JOIN TotaleServizi t ON p.idPrenotazione = t.idPrenotazione
         ";
+
 
         private const string SELECT_BY_CF = @"
         SELECT p.idPrenotazione, c.CodiceFiscale, c.Cognome, c.Nome, c.Citta, c.Provincia, c.Email, c.Telefono, c.Cellulare,
@@ -39,7 +46,13 @@ namespace Software_hotel.DAO
 
         private const string ADD_SERVIZIO = @"
         INSERT INTO ServiziPerPrenotazione (idServizio, idPrenotazione, Prezzo, Quantita)
-        VALUES (@idServizio, @idPrenotazione, @Prezzo, @Quantita)";
+        VALUES (@idServizio, @idPrenotazione, @Prezzo, @Quantita);";
+
+        private const string TOTALE_CON_SERVIZIO = @"
+        WITH TotaleServizi AS (SELECT idPrenotazione, SUM(Prezzo * Quantita) AS Totale
+        FROM ServiziPerPrenotazione GROUP BY idPrenotazione)
+        SELECT p.Tariffa - p.Caparra + Totale FROM Prenotazioni p JOIN TotaleServizi t ON p.idPrenotazione = t.idPrenotazione
+        WHERE p.idPrenotazione = @idPrenotazione";
 
         private const string SELECT_SERVIZI_PER_PRENOTAZIONE = @"
         SELECT sp.idSp, sp.idServizio, sp.idPrenotazione, sp.Prezzo, sp.Quantita,
@@ -62,6 +75,8 @@ namespace Software_hotel.DAO
                 using var reader = cmd.ExecuteReader();
                 while (reader.Read())
                 {
+                    decimal totaleServizi = reader.IsDBNull(17) ? 0 : reader.GetDecimal(17); 
+
                     var prenotazione = new Prenotazione
                     {
                         idPrenotazione = reader.GetInt32(0),
@@ -87,29 +102,9 @@ namespace Software_hotel.DAO
                         Caparra = reader.GetDecimal(14),
                         Tariffa = reader.GetDecimal(15),
                         TipoPensione = reader.IsDBNull(16) ? null : reader.GetString(16),
-                        serviziPerPrenotazione = new List<ServizioPerPrenotazione>()
+                        ImportoDaSaldare = reader.GetDecimal(15) - reader.GetDecimal(14) + totaleServizi 
                     };
-                    decimal totaleServizi = 0m; // Totale dei servizi = 0
-
-                    //do
-                    //{
-                    //    if (!reader.IsDBNull(17))
-                    //    {
-                    //        var servizio = new ServizioPerPrenotazione
-                    //        {
-                    //            idSP = reader.GetInt32(17),
-                    //            Prezzo = reader.GetDecimal(18),
-                    //            Quantita = reader.GetInt32(19),
-                    //            DescrizioneServizio = reader.GetString(20)
-                    //        };
-                    //        totaleServizi += servizio.Prezzo * servizio.Quantita; 
-                    //        prenotazione.serviziPerPrenotazione.Add(servizio);
-                    //    }
-                    //} while (reader.Read() && reader.GetInt32(0) == prenotazione.idPrenotazione);
-
-                    prenotazione.ImportoDaSaldare = prenotazione.Tariffa - prenotazione.Caparra + totaleServizi;
                     prenotazioni.Add(prenotazione);
-
                 }
             }
             catch (Exception ex)
@@ -119,6 +114,7 @@ namespace Software_hotel.DAO
 
             return prenotazioni;
         }
+
 
 
         public IEnumerable<ServiziAggiuntivi> GetListaServizi()
@@ -147,25 +143,41 @@ namespace Software_hotel.DAO
             return servizi;
         }
 
-        public void AggiungiServizio(int idPrenotazione, ServizioPerPrenotazione servizioPerPrenotazione)
+        public decimal AggiungiServizio(int idPrenotazione, ServizioPerPrenotazione servizioPerPrenotazione)
         {
+            decimal importoDaSaldare = 0;
+
             try
             {
                 using var conn = CreateConnection();
                 conn.Open();
+
                 using var cmd = GetCommand(ADD_SERVIZIO, conn);
                 cmd.Parameters.Add(new SqlParameter("@idServizio", servizioPerPrenotazione.idServizio));
                 cmd.Parameters.Add(new SqlParameter("@idPrenotazione", idPrenotazione));
                 cmd.Parameters.Add(new SqlParameter("@Prezzo", servizioPerPrenotazione.Prezzo));
                 cmd.Parameters.Add(new SqlParameter("@Quantita", servizioPerPrenotazione.Quantita));
-
                 cmd.ExecuteNonQuery();
+
+                // SALDO CON SERVIZIO AGGIUNTIVO
+                using (var cmdTotal = GetCommand(TOTALE_CON_SERVIZIO, conn))
+                {
+                    cmdTotal.Parameters.Add(new SqlParameter("@idPrenotazione", idPrenotazione));
+
+                    using var reader = cmdTotal.ExecuteReader();
+                    if (reader.Read())
+                    {
+                        importoDaSaldare = reader.GetDecimal(0);
+                    }
+                }
             }
             catch (Exception ex)
             {
-                throw new Exception("Errore nell'aggiunta del servizio", ex);
+                throw new Exception("Errore nell'aggiunta del servizio e nel calcolo dell'importo da saldare", ex);
             }
+            return importoDaSaldare;
         }
+
 
         public IEnumerable<ServizioPerPrenotazione> GetServiziPerPrenotazione(int idPrenotazione)
         {
@@ -242,23 +254,7 @@ namespace Software_hotel.DAO
                         serviziPerPrenotazione = new List<ServizioPerPrenotazione>()
                     };
 
-                    decimal totaleServizi = 0m; // Totale dei servizi = 0
-
-                    //do
-                    //{
-                    //    if (!reader.IsDBNull(17))
-                    //    {
-                    //        var servizio = new ServizioPerPrenotazione
-                    //        {
-                    //            idSP = reader.GetInt32(17),
-                    //            Prezzo = reader.GetDecimal(18),
-                    //            Quantita = reader.GetInt32(19),
-                    //            DescrizioneServizio = reader.GetString(20)
-                    //        };
-                    //        totaleServizi += servizio.Prezzo * servizio.Quantita;
-                    //        prenotazione.serviziPerPrenotazione.Add(servizio);
-                    //    }
-                    //} while (reader.Read() && reader.GetInt32(0) == prenotazione.idPrenotazione);
+                    decimal totaleServizi = 0m; 
 
                     prenotazione.ImportoDaSaldare = prenotazione.Tariffa - prenotazione.Caparra + totaleServizi;
                     prenotazioni.Add(prenotazione);
